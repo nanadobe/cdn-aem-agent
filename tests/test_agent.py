@@ -106,6 +106,7 @@ class GenerationTests(unittest.TestCase):
         self.assertIn("when", result.generated_rules[0])
         self.assertIn("action", result.generated_rules[0])
         self.assertNotIn("abc123xyz987", result.skipped_requirements[0]["requirement"])
+        self.assertEqual(result.analysis_report.error_count, 0)
         rate_limits = [rule for rule in result.generated_rules if "rateLimit" in rule]
         self.assertEqual(rate_limits[0]["rateLimit"]["limit"], 10)
         self.assertEqual(rate_limits[0]["action"]["type"], "block")

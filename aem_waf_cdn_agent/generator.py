@@ -213,9 +213,8 @@ def _base_rule(
     name_hint: str,
     rate_limit: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    rule_name = _next_rule_name(
-        existing_names, f"{action}-{intent}-{_slugify(name_hint)}"
-    )
+    normalized_name = _slugify(f"{action}-{intent}-{name_hint}")
+    rule_name = _next_rule_name(existing_names, normalized_name)
     if action == "rate_limit":
         rule = {
             "name": rule_name,
