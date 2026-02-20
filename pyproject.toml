@@ -19,3 +19,6 @@ dependencies = [
 aem-waf-cdn-agent = "aem_waf_cdn_agent.cli:main"
 aem-waf-cdn-agent-api = "aem_waf_cdn_agent.api:run"
 aem-waf-cdn-agent-mcp = "aem_waf_cdn_agent.mcp_server:main"
+
+[tool.setuptools.packages.find]
+include = ["aem_waf_cdn_agent*"]
