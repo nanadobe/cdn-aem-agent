@@ -81,6 +81,12 @@ or
 uvicorn aem_waf_cdn_agent.api:app --host 0.0.0.0 --port 8080
 ```
 
+If script entrypoints are not on your PATH, use:
+
+```bash
+python3 -m aem_waf_cdn_agent.api
+```
+
 ### 3.2 Test API endpoints locally
 
 #### Health
@@ -122,6 +128,12 @@ While running locally:
 
 ```bash
 aem-waf-cdn-agent-mcp
+```
+
+If script entrypoints are not on your PATH, use:
+
+```bash
+python3 -m aem_waf_cdn_agent.mcp_server
 ```
 
 This exposes tools:

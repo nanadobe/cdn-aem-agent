@@ -144,6 +144,12 @@ or:
 uvicorn aem_waf_cdn_agent.api:app --host 0.0.0.0 --port 8080
 ```
 
+or:
+
+```bash
+python3 -m aem_waf_cdn_agent.api
+```
+
 Endpoints:
 - `GET /health`
 - `POST /analyze`
@@ -158,6 +164,12 @@ Start MCP server:
 
 ```bash
 aem-waf-cdn-agent-mcp
+```
+
+or:
+
+```bash
+python3 -m aem_waf_cdn_agent.mcp_server
 ```
 
 Cursor MCP config example:
