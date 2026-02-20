@@ -1,0 +1,72 @@
+kind: "CDN"
+version: "1"
+metadata:
+  envTypes: ["dev", "stage", "prod"]
+data:
+  trafficFilters:
+    rules:
+      - name: prevent-dos-attacks-edge
+        when:
+          reqProperty: tier
+          equals: "publish"
+        rateLimit:
+          limit: 500
+          window: 10
+          penalty: 300
+          count: all
+          groupBy:
+            - reqProperty: clientIp
+        action:
+          type: log
+          alert: true
+      - name: prevent-dos-attacks-origin
+        when:
+          reqProperty: tier
+          equals: "publish"
+        rateLimit:
+          limit: 100
+          window: 10
+          penalty: 300
+          count: fetches
+          groupBy:
+            - reqProperty: clientIp
+        action:
+          type: log
+          alert: true
+      - name: block-ofac-countries
+        when:
+          allOf:
+            - reqProperty: tier
+              in: ["author", "publish"]
+            - reqProperty: clientCountry
+              in:
+                - SY
+                - BY
+                - MM
+                - KP
+                - IQ
+                - CD
+                - SD
+                - IR
+                - LR
+                - ZW
+                - CU
+                - CI
+        action: block
+      - name: attacks-from-bad-ips-globally
+        when:
+          reqProperty: tier
+          in: ["author", "publish"]
+        action:
+          type: block
+          wafFlags:
+            - ATTACK-FROM-BAD-IP
+      - name: attacks-from-any-ips-globally
+        when:
+          reqProperty: tier
+          in: ["author", "publish"]
+        action:
+          type: log
+          alert: true
+          wafFlags:
+            - ATTACK
