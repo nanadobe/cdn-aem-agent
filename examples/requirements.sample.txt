@@ -1,0 +1,4 @@
+Block access to /system/console*
+Rate limit /system/sling/login/j_security_check to 600 requests per minute
+Allow traffic from 10.10.0.0/16
+Restrict methods to GET and POST for /content/*

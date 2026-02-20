@@ -39,6 +39,14 @@ This helps prevent accidental disclosure of customer-sensitive values in logs/re
 pip install -e .
 ```
 
+## Quick local demo (before hosting)
+
+```bash
+python3 -m unittest discover -s tests -v
+python3 -m aem_waf_cdn_agent analyze --cdn-yaml ./examples/cdn.sample.yaml
+python3 -m aem_waf_cdn_agent generate --cdn-yaml ./examples/cdn.sample.yaml --requirements-file ./examples/requirements.sample.txt --output-cdn-yaml ./examples/cdn.generated.yaml
+```
+
 ## CLI Usage
 
 ### Analyze an existing config
@@ -121,3 +129,61 @@ result = agent.generate_from_files(
 )
 print(result.generated_rules)
 ```
+
+## Host as API for chat interfaces
+
+Start local API server:
+
+```bash
+aem-waf-cdn-agent-api
+```
+
+or:
+
+```bash
+uvicorn aem_waf_cdn_agent.api:app --host 0.0.0.0 --port 8080
+```
+
+Endpoints:
+- `GET /health`
+- `POST /analyze`
+- `POST /generate`
+
+Interactive docs:
+- `http://127.0.0.1:8080/docs`
+
+## Consume in Cursor/IDE via MCP
+
+Start MCP server:
+
+```bash
+aem-waf-cdn-agent-mcp
+```
+
+Cursor MCP config example:
+
+```json
+{
+  "mcpServers": {
+    "aem-cdn-agent": {
+      "command": "aem-waf-cdn-agent-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+Sample config file is available at `examples/cursor.mcp.json`.
+
+## Docker
+
+```bash
+docker build -t aem-waf-cdn-agent:local .
+docker run --rm -p 8080:8080 aem-waf-cdn-agent:local
+```
+
+## Full documentation
+
+For complete local testing, pre-production checks, hosting patterns, and troubleshooting:
+
+- `docs/LOCAL_TESTING_AND_HOSTING.md`
