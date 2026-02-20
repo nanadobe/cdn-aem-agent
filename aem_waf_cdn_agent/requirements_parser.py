@@ -34,11 +34,12 @@ METHOD_PATTERN = r"(?:get|post|put|patch|delete|head|options)"
 _RE_RATE_LIMIT_A = re.compile(
     r"(?:rate[\s-]*limit|limit)\s+(?:requests?\s+)?(?:to|for|on)?\s*"
     r"(?P<path>/[^\s,;]+).*?(?P<limit>\d+)\s*(?:requests?)?\s*(?:per|/)\s*"
-    r"(?:minute|min|m)\b",
+    r"(?P<unit>second|sec|s|minute|min|m)\b",
     re.IGNORECASE,
 )
 _RE_RATE_LIMIT_B = re.compile(
-    r"(?P<limit>\d+)\s*(?:requests?)?\s*(?:per|/)\s*(?:minute|min|m)\b.*?"
+    r"(?P<limit>\d+)\s*(?:requests?)?\s*(?:per|/)\s*"
+    r"(?P<unit>second|sec|s|minute|min|m)\b.*?"
     r"(?:to|for|on)\s*(?P<path>/[^\s,;]+)",
     re.IGNORECASE,
 )
@@ -129,7 +130,8 @@ def _parse_single_requirement(requirement: str) -> ParsedRequirement:
             intent="rate_limit_path",
             params={
                 "path": match.group("path"),
-                "limit_per_minute": int(match.group("limit")),
+                "limit": int(match.group("limit")),
+                "limit_unit": _normalize_rate_limit_unit(match.group("unit")),
             },
             confidence=0.95,
         )
@@ -139,7 +141,8 @@ def _parse_single_requirement(requirement: str) -> ParsedRequirement:
             intent="rate_limit_path",
             params={
                 "path": match.group("path"),
-                "limit_per_minute": int(match.group("limit")),
+                "limit": int(match.group("limit")),
+                "limit_unit": _normalize_rate_limit_unit(match.group("unit")),
             },
             confidence=0.92,
         )
@@ -259,3 +262,10 @@ def _extract_country_codes(text: str) -> list[str]:
         if resolved:
             country_codes.append(resolved)
     return sorted(set(country_codes))
+
+
+def _normalize_rate_limit_unit(unit: str) -> str:
+    lowered = unit.lower().strip()
+    if lowered in {"second", "sec", "s"}:
+        return "second"
+    return "minute"

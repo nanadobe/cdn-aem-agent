@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 
 from .config import ensure_primary_rule_collection, extract_rule_collections
 from .models import ParsedRequirement
+from .privacy import redact_requirement_text
 from .requirements_parser import parse_requirements
 
 
@@ -14,36 +16,35 @@ def generate_rules_from_requirements(
     config: dict[str, Any], requirements_text: str
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     """Generate rules and mutate config in-place."""
+    _ensure_top_level_structure(config)
     parsed = parse_requirements(requirements_text)
     generated_rules: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
 
     target_collection = ensure_primary_rule_collection(config)
-    existing_ids = _collect_existing_ids(config)
-    next_priority = _initial_priority(config)
+    existing_names = _collect_existing_names(config)
 
     for item in parsed:
         if item.intent == "unknown":
             skipped.append(
                 {
-                    "requirement": item.raw_text,
+                    "requirement": redact_requirement_text(item.raw_text),
                     "reason": "No deterministic parser matched this requirement.",
                 }
             )
             continue
 
-        rule = _build_rule(item=item, existing_ids=existing_ids, priority=next_priority)
+        rule = _build_rule(item=item, existing_names=existing_names)
         if rule is None:
             skipped.append(
                 {
-                    "requirement": item.raw_text,
+                    "requirement": redact_requirement_text(item.raw_text),
                     "reason": "Parsed requirement did not have enough parameters.",
                 }
             )
             continue
 
-        existing_ids.add(rule["id"])
-        next_priority += 10
+        existing_names.add(rule["name"])
         generated_rules.append(rule)
         target_collection.rules.append(rule)
 
@@ -51,24 +52,21 @@ def generate_rules_from_requirements(
 
 
 def _build_rule(
-    *, item: ParsedRequirement, existing_ids: set[str], priority: int
+    *, item: ParsedRequirement, existing_names: set[str]
 ) -> dict[str, Any] | None:
     params = item.params
     intent = item.intent
-    source = item.raw_text
 
     if intent == "block_path":
         path = params.get("path")
         if not isinstance(path, str):
             return None
         return _base_rule(
-            existing_ids=existing_ids,
+            existing_names=existing_names,
             action="block",
             intent=intent,
-            priority=priority,
-            source=source,
-            match={"path": path},
-            id_hint=path,
+            when=_path_tier_condition(path, tiers=["publish"]),
+            name_hint=path,
         )
 
     if intent == "allow_path":
@@ -76,44 +74,45 @@ def _build_rule(
         if not isinstance(path, str):
             return None
         return _base_rule(
-            existing_ids=existing_ids,
+            existing_names=existing_names,
             action="allow",
             intent=intent,
-            priority=priority,
-            source=source,
-            match={"path": path},
-            id_hint=path,
+            when=_path_tier_condition(path, tiers=["publish"]),
+            name_hint=path,
         )
 
     if intent == "rate_limit_path":
         path = params.get("path")
-        limit = params.get("limit_per_minute")
-        if not isinstance(path, str) or not isinstance(limit, int):
+        limit = params.get("limit")
+        unit = params.get("limit_unit")
+        if not isinstance(path, str) or not isinstance(limit, int) or not isinstance(unit, str):
             return None
-        rule = _base_rule(
-            existing_ids=existing_ids,
+        rate_limit_per_second = _to_rate_limit_per_second(limit, unit)
+        return _base_rule(
+            existing_names=existing_names,
             action="rate_limit",
             intent=intent,
-            priority=priority,
-            source=source,
-            match={"path": path},
-            id_hint=f"{path}-{limit}",
+            when=_path_tier_condition(path, tiers=["publish"]),
+            name_hint=f"{path}-{rate_limit_per_second}",
+            rate_limit={
+                "limit": rate_limit_per_second,
+                "window": 10,
+                "penalty": 300,
+                "count": "all",
+                "groupBy": [{"reqProperty": "clientIp"}],
+            },
         )
-        rule["limit_per_minute"] = limit
-        return rule
 
     if intent == "block_ip":
         cidrs = params.get("ip_cidrs")
         if not isinstance(cidrs, list) or not cidrs:
             return None
         return _base_rule(
-            existing_ids=existing_ids,
+            existing_names=existing_names,
             action="block",
             intent=intent,
-            priority=priority,
-            source=source,
-            match={"ip_cidrs": cidrs},
-            id_hint="-".join(cidrs),
+            when=_client_ip_condition(cidrs, tiers=["author", "publish"]),
+            name_hint="-".join(cidrs),
         )
 
     if intent == "allow_ip":
@@ -121,13 +120,11 @@ def _build_rule(
         if not isinstance(cidrs, list) or not cidrs:
             return None
         return _base_rule(
-            existing_ids=existing_ids,
+            existing_names=existing_names,
             action="allow",
             intent=intent,
-            priority=priority,
-            source=source,
-            match={"ip_cidrs": cidrs},
-            id_hint="-".join(cidrs),
+            when=_client_ip_condition(cidrs, tiers=["author", "publish"]),
+            name_hint="-".join(cidrs),
         )
 
     if intent == "block_country":
@@ -135,13 +132,11 @@ def _build_rule(
         if not isinstance(countries, list) or not countries:
             return None
         return _base_rule(
-            existing_ids=existing_ids,
+            existing_names=existing_names,
             action="block",
             intent=intent,
-            priority=priority,
-            source=source,
-            match={"country_codes": countries},
-            id_hint="-".join(countries),
+            when=_client_country_condition(countries, tiers=["author", "publish"]),
+            name_hint="-".join(countries),
         )
 
     if intent == "allow_country":
@@ -149,13 +144,11 @@ def _build_rule(
         if not isinstance(countries, list) or not countries:
             return None
         return _base_rule(
-            existing_ids=existing_ids,
+            existing_names=existing_names,
             action="allow",
             intent=intent,
-            priority=priority,
-            source=source,
-            match={"country_codes": countries},
-            id_hint="-".join(countries),
+            when=_client_country_condition(countries, tiers=["author", "publish"]),
+            name_hint="-".join(countries),
         )
 
     if intent == "allow_methods_path":
@@ -163,14 +156,21 @@ def _build_rule(
         methods = params.get("methods")
         if not isinstance(path, str) or not isinstance(methods, list) or not methods:
             return None
+        method_values = sorted({method.upper() for method in methods if isinstance(method, str)})
+        if not method_values:
+            return None
         return _base_rule(
-            existing_ids=existing_ids,
-            action="allow",
+            existing_names=existing_names,
+            action="block",
             intent=intent,
-            priority=priority,
-            source=source,
-            match={"path": path, "methods": methods},
-            id_hint=f"{path}-{'-'.join(methods)}",
+            when={
+                "allOf": [
+                    _path_predicate(path),
+                    {"reqProperty": "method", "notIn": method_values},
+                    {"reqProperty": "tier", "in": ["publish"]},
+                ]
+            },
+            name_hint=f"{path}-{'-'.join(method_values)}",
         )
 
     if intent == "require_header_path":
@@ -179,91 +179,137 @@ def _build_rule(
         value = params.get("header_value")
         if not isinstance(path, str) or not isinstance(header, str):
             return None
-        rule = _base_rule(
-            existing_ids=existing_ids,
+        predicate = (
+            {"reqHeader": header, "exists": False}
+            if value in {None, "required"}
+            else {"reqHeader": header, "doesNotEqual": str(value)}
+        )
+        return _base_rule(
+            existing_names=existing_names,
             action="block",
             intent=intent,
-            priority=priority,
-            source=source,
-            match={"path": path},
-            id_hint=f"{path}-{header}",
+            when={
+                "allOf": [
+                    _path_predicate(path),
+                    predicate,
+                    {"reqProperty": "tier", "in": ["publish"]},
+                ]
+            },
+            name_hint=f"{path}-{header}",
         )
-        rule["required_headers"] = {header: value or "required"}
-        return rule
 
     if intent == "challenge_path":
-        path = params.get("path")
-        if not isinstance(path, str):
-            return None
-        return _base_rule(
-            existing_ids=existing_ids,
-            action="challenge",
-            intent=intent,
-            priority=priority,
-            source=source,
-            match={"path": path},
-            id_hint=path,
-        )
+        return None
 
     return None
 
 
 def _base_rule(
     *,
-    existing_ids: set[str],
+    existing_names: set[str],
     action: str,
     intent: str,
-    priority: int,
-    source: str,
-    match: dict[str, Any],
-    id_hint: str,
+    when: dict[str, Any] | str,
+    name_hint: str,
+    rate_limit: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    rule_id = _next_rule_id(existing_ids, f"{action}-{intent}-{_slugify(id_hint)}")
+    rule_name = _next_rule_name(
+        existing_names, f"{action}-{intent}-{_slugify(name_hint)}"
+    )
+    if action == "rate_limit":
+        rule = {
+            "name": rule_name,
+            "when": when,
+            "rateLimit": rate_limit,
+            "action": {"type": "block", "alert": True},
+        }
+    else:
+        rule = {
+            "name": rule_name,
+            "when": when,
+            "action": {"type": action},
+        }
+    return rule
+
+
+def _ensure_top_level_structure(config: dict[str, Any]) -> None:
+    if "kind" not in config:
+        config["kind"] = "CDN"
+    if "version" not in config:
+        config["version"] = "1"
+    data = config.get("data")
+    if not isinstance(data, dict):
+        data = {}
+        config["data"] = data
+    traffic_filters = data.get("trafficFilters")
+    if not isinstance(traffic_filters, dict):
+        traffic_filters = {}
+        data["trafficFilters"] = traffic_filters
+    if "rules" not in traffic_filters or not isinstance(traffic_filters.get("rules"), list):
+        traffic_filters["rules"] = []
+
+
+def _path_tier_condition(path: str, *, tiers: list[str]) -> dict[str, Any]:
+    return {"allOf": [_path_predicate(path), {"reqProperty": "tier", "in": tiers}]}
+
+
+def _path_predicate(path: str) -> dict[str, Any]:
+    if "*" in path:
+        return {"reqProperty": "path", "like": path}
+    return {"reqProperty": "path", "equals": path}
+
+
+def _client_ip_condition(cidrs: list[str], *, tiers: list[str]) -> dict[str, Any]:
+    predicate_key = "in" if len(cidrs) > 1 else "equals"
+    predicate_value: Any = cidrs if len(cidrs) > 1 else cidrs[0]
     return {
-        "id": rule_id,
-        "description": f"Generated from requirement: {source}",
-        "action": action,
-        "priority": priority,
-        "match": match,
-        "metadata": {"generated_by": "aem_waf_cdn_agent", "source_requirement": source},
+        "allOf": [
+            {"reqProperty": "tier", "in": tiers},
+            {"reqProperty": "clientIp", predicate_key: predicate_value},
+        ]
     }
 
 
-def _collect_existing_ids(config: dict[str, Any]) -> set[str]:
+def _client_country_condition(countries: list[str], *, tiers: list[str]) -> dict[str, Any]:
+    return {
+        "allOf": [
+            {"reqProperty": "tier", "in": tiers},
+            {"reqProperty": "clientCountry", "in": countries},
+        ]
+    }
+
+
+def _to_rate_limit_per_second(value: int, unit: str) -> int:
+    normalized = unit.lower()
+    if normalized.startswith("second"):
+        return max(10, min(10000, value))
+    # Adobe syntax supports per-second limits; convert minute to second conservatively.
+    converted = math.ceil(value / 60)
+    return max(10, min(10000, converted))
+
+
+def _collect_existing_names(config: dict[str, Any]) -> set[str]:
     values: set[str] = set()
     for collection in extract_rule_collections(config):
         for rule in collection.rules:
             if not isinstance(rule, dict):
                 continue
-            for key in ("id", "name", "rule_id"):
-                candidate = rule.get(key)
-                if isinstance(candidate, str) and candidate.strip():
-                    values.add(candidate.strip())
-                    break
+            candidate = rule.get("name")
+            if isinstance(candidate, str) and candidate.strip():
+                values.add(candidate.strip())
     return values
 
 
-def _initial_priority(config: dict[str, Any]) -> int:
-    highest = 90
-    for collection in extract_rule_collections(config):
-        for rule in collection.rules:
-            if not isinstance(rule, dict):
-                continue
-            value = rule.get("priority")
-            if isinstance(value, int):
-                highest = max(highest, value)
-    return highest + 10
-
-
-def _next_rule_id(existing_ids: set[str], base: str) -> str:
-    candidate = base[:96] if len(base) > 96 else base
-    if candidate not in existing_ids:
+def _next_rule_name(existing_names: set[str], base: str) -> str:
+    candidate = base[:64] if len(base) > 64 else base
+    if candidate not in existing_names:
         return candidate
     counter = 2
     while True:
         fallback = f"{candidate}-{counter}"
-        if fallback not in existing_ids:
-            return fallback
+        trimmed = fallback[:64]
+        if trimmed not in existing_names:
+            return trimmed
         counter += 1
 
 

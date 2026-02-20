@@ -1,0 +1,18 @@
+kind: "CDN"
+version: "1"
+metadata:
+  envTypes: ["dev", "stage", "prod"]
+data:
+  trafficFilters:
+    rules:
+      - name: publish-auth-requests
+        when:
+          allOf:
+            - reqProperty: tier
+              matches: "publish"
+            - reqProperty: path
+              in:
+                - /system/sling/login/j_security_check
+                - /system/sling/logout
+        action:
+          type: log

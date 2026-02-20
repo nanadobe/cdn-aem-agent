@@ -13,6 +13,8 @@ RULE_HINT_KEYS = {
     "name",
     "action",
     "match",
+    "when",
+    "rateLimit",
     "conditions",
     "path",
     "path_regex",
@@ -71,6 +73,7 @@ def extract_rule_collections(config: dict[str, Any]) -> list[RuleCollection]:
         collections.append(RuleCollection(path=path, rules=rules))
 
     prioritized_paths: list[tuple[str, ...]] = [
+        ("data", "trafficFilters", "rules"),
         ("rules",),
         ("waf", "rules"),
         ("cdn", "rules"),
@@ -114,7 +117,17 @@ def ensure_primary_rule_collection(config: dict[str, Any]) -> RuleCollection:
     """Return best target rule list, creating one if missing."""
     collections = extract_rule_collections(config)
     if collections:
-        collections.sort(key=lambda item: (len(item.path), item.path_string))
+        for collection in collections:
+            if collection.path == ("data", "trafficFilters", "rules"):
+                return collection
         return collections[0]
-    config["rules"] = []
-    return RuleCollection(path=("rules",), rules=config["rules"])
+    data = config.get("data")
+    if not isinstance(data, dict):
+        data = {}
+        config["data"] = data
+    traffic_filters = data.get("trafficFilters")
+    if not isinstance(traffic_filters, dict):
+        traffic_filters = {}
+        data["trafficFilters"] = traffic_filters
+    traffic_filters["rules"] = []
+    return RuleCollection(path=("data", "trafficFilters", "rules"), rules=traffic_filters["rules"])

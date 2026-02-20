@@ -3,20 +3,35 @@
 This project provides a deterministic Python agent to:
 
 1. **Analyze and validate** AEM-focused WAF/CDN rule configs (`cdn.yaml`).
-2. **Detect risky or incomplete security posture** (schema issues, broad allows, weak protection for sensitive AEM endpoints, missing auth rate limits, etc.).
+2. **Detect risky or incomplete security posture** based on Adobe's public starter guidance (syntax issues, invalid conditions/actions/rate limits, missing recommended baseline controls, etc.).
 3. **Generate rules from natural-language requirements** and merge them back into your `cdn.yaml`.
 
-## What "AEM-specific" means in this agent
+## Documentation source of truth
 
-The analyzer includes baseline checks for common AEM-sensitive surfaces:
+Validation and generation behavior is aligned to these Adobe public docs:
 
-- `/system/console`
-- `/crx`
-- `/etc/packages`
-- `/bin/querybuilder`
-- auth/login endpoints like `/libs/granite/core/content/login` and `/j_security_check`
+- https://experienceleague.adobe.com/en/docs/experience-manager-cloud-service/content/security/traffic-filter-rules-including-waf
+- https://experienceleague.adobe.com/en/docs/experience-manager-cloud-service/content/implementing/content-delivery/cdn-configuring-traffic
+- https://experienceleague.adobe.com/en/docs/experience-manager-cloud-service/content/security/traffic-filter-rules-including-waf?lang=en
 
-It flags missing protections and weak actions (for example, allowing sensitive internals).
+It validates Adobe syntax including:
+- `kind: "CDN"`, `version: "1"`
+- `data.trafficFilters.rules`
+- `when` condition structure (`allOf` / `anyOf`, getters, predicates)
+- `action` structure (`allow` / `block` / `log`, `wafFlags`, `status`, `alert`)
+- `rateLimit` structure (`limit`, `window`, `penalty`, `count`, `groupBy`)
+- WAF flags and Adobe constraints (for example, `rateLimit` cannot be combined with `wafFlags`)
+
+It also checks for Adobe-recommended baseline starter coverage (edge/origin DoS rate limits, OFAC country blocking rule, ATTACK/ATTACK-FROM-BAD-IP WAF starter rules).
+
+## Privacy behavior
+
+The agent redacts sensitive values in analysis output and generated metadata-facing strings:
+- IP/CIDR literals
+- token/secret/password-like assignments
+- bearer tokens
+
+This helps prevent accidental disclosure of customer-sensitive values in logs/reports.
 
 ## Install
 
@@ -51,6 +66,8 @@ python -m aem_waf_cdn_agent generate \
   --requirement "Rate limit /libs/granite/core/content/login to 60 requests per minute"
 ```
 
+Note: Adobe `rateLimit.limit` is requests/second. If a requirement is expressed per minute, the generator converts it conservatively to per-second limits.
+
 ## Supported natural-language requirement intents
 
 The parser is deterministic and regex-based for predictability.
@@ -62,28 +79,31 @@ The parser is deterministic and regex-based for predictability.
 - Block/allow countries
 - Restrict/allow methods on path
 - Require header on path
-- Challenge traffic on path
 
 Unmatched requirements are reported as skipped with a reason.
 
-## Expected rule shape
+## Expected generated rule shape (Adobe syntax)
 
 Generated rules use this schema:
 
 ```yaml
-rules:
-  - id: block-block-path-system-console
-    description: Generated from requirement: Block access to /system/console*
-    action: block
-    priority: 100
-    match:
-      path: /system/console*
-    metadata:
-      generated_by: aem_waf_cdn_agent
-      source_requirement: Block access to /system/console*
+kind: "CDN"
+version: "1"
+data:
+  trafficFilters:
+    rules:
+      - name: block-block-path-system-console
+        when:
+          allOf:
+            - reqProperty: path
+              like: /system/console*
+            - reqProperty: tier
+              in: [publish]
+        action:
+          type: block
 ```
 
-The analyzer supports common variants (top-level `rules`, `waf.rules`, `cdn.rules`, `data.rules`, etc.).
+The analyzer can still discover non-canonical rule paths, but prefers `data.trafficFilters.rules` and warns when rules are in non-standard locations.
 
 ## Python API
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .privacy import maybe_redact_value, redact_structure
+
 
 @dataclass(slots=True)
 class AnalysisFinding:
@@ -50,10 +52,10 @@ class AnalysisReport:
             AnalysisFinding(
                 code=code,
                 severity=severity,
-                message=message,
-                path=path,
-                rule_id=rule_id,
-                recommendation=recommendation,
+                message=maybe_redact_value(message),
+                path=maybe_redact_value(path),
+                rule_id=maybe_redact_value(rule_id),
+                recommendation=maybe_redact_value(recommendation),
             )
         )
 
@@ -103,7 +105,7 @@ class GenerationResult:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "generated_rules": self.generated_rules,
-            "skipped_requirements": self.skipped_requirements,
+            "generated_rules": redact_structure(self.generated_rules),
+            "skipped_requirements": redact_structure(self.skipped_requirements),
             "analysis_report": self.analysis_report.to_dict(),
         }

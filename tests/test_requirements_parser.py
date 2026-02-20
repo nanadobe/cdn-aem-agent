@@ -16,6 +16,19 @@ class RequirementParserTests(unittest.TestCase):
         self.assertEqual(parsed[0].params["path"], "/content/*")
         self.assertEqual(parsed[0].params["methods"], ["GET", "POST"])
 
+    def test_parser_extracts_rate_limit_units(self) -> None:
+        parsed = parse_requirements(
+            "Rate limit /system/sling/login/j_security_check to 120 requests per minute"
+        )
+        self.assertEqual(parsed[0].intent, "rate_limit_path")
+        self.assertEqual(parsed[0].params["path"], "/system/sling/login/j_security_check")
+        self.assertEqual(parsed[0].params["limit"], 120)
+        self.assertEqual(parsed[0].params["limit_unit"], "minute")
+
+        parsed_second = parse_requirements("Limit /api/login to 25 requests per second")
+        self.assertEqual(parsed_second[0].params["limit"], 25)
+        self.assertEqual(parsed_second[0].params["limit_unit"], "second")
+
 
 if __name__ == "__main__":
     unittest.main()
