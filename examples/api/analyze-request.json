@@ -1,3 +1,0 @@
-{
-  "cdn_yaml": "kind: \"CDN\"\nversion: \"1\"\ndata:\n  trafficFilters:\n    rules:\n      - name: path-rule\n        when: { reqProperty: path, equals: /block-me }\n        action: block\n"
-}

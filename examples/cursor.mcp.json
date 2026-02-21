@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "aem-cdn-agent": {
-      "command": "aem-waf-cdn-agent-mcp",
-      "args": []
+      "command": "python3",
+      "args": ["-m", "aem_waf_cdn_agent.mcp_server"]
     }
   }
 }

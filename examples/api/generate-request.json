@@ -1,4 +1,0 @@
-{
-  "cdn_yaml": "kind: \"CDN\"\nversion: \"1\"\ndata:\n  trafficFilters:\n    rules: []\n",
-  "requirements_text": "Block access to /system/console*\nRate limit /system/sling/login/j_security_check to 600 requests per minute"
-}

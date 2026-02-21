@@ -130,35 +130,7 @@ result = agent.generate_from_files(
 print(result.generated_rules)
 ```
 
-## Host as API for chat interfaces
-
-Start local API server:
-
-```bash
-aem-waf-cdn-agent-api
-```
-
-or:
-
-```bash
-uvicorn aem_waf_cdn_agent.api:app --host 0.0.0.0 --port 8080
-```
-
-or:
-
-```bash
-python3 -m aem_waf_cdn_agent.api
-```
-
-Endpoints:
-- `GET /health`
-- `POST /analyze`
-- `POST /generate`
-
-Interactive docs:
-- `http://127.0.0.1:8080/docs`
-
-## Consume in Cursor/IDE via MCP
+## MCP-only release usage (Cursor / IDE)
 
 Start MCP server:
 
@@ -171,6 +143,25 @@ or:
 ```bash
 python3 -m aem_waf_cdn_agent.mcp_server
 ```
+
+### MCP tools exposed
+
+- `analyze_cdn_yaml`
+- `analyse_cdn_yaml` (alias)
+- `validate_cdn_yaml`
+- `create_analysis_report`
+- `create_rules_from_requirements`
+- `add_feature_pack`
+- `create_custom_rule`
+- `list_feature_packs`
+- `list_tool_capabilities`
+- `get_adobe_reference_docs`
+
+### Feature packs for `add_feature_pack`
+
+- `standard_recommended`
+- `waf_recommended` (mode: `safe` or `strict`)
+- `auth_monitoring`
 
 Cursor MCP config example:
 
@@ -187,15 +178,8 @@ Cursor MCP config example:
 
 Sample config file is available at `examples/cursor.mcp.json`.
 
-## Docker
-
-```bash
-docker build -t aem-waf-cdn-agent:local .
-docker run --rm -p 8080:8080 aem-waf-cdn-agent:local
-```
-
 ## Full documentation
 
-For complete local testing, pre-production checks, hosting patterns, and troubleshooting:
+For complete local testing, MCP release notes, and troubleshooting:
 
 - `docs/LOCAL_TESTING_AND_HOSTING.md`

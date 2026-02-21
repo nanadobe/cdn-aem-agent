@@ -1,9 +1,0 @@
-.git
-.gitignore
-docs_cache
-tests
-__pycache__
-*.pyc
-.venv
-analysis-report.json
-generation-report.json
